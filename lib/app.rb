@@ -110,4 +110,13 @@ class App < Sinatra::Base
     headers['X-Slimmer-Skip'] = "true"
     send_file "#{GRAPHS_IMAGES_DIR}/yesterday-legend.png"
   end
+
+  get "/format-success" do
+    erb :format_success
+  end
+
+  get "/format-success.json" do
+    content_type :json
+    api_result_to_json(api.format_success)
+  end
 end
