@@ -108,6 +108,8 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
     // - Derived Constants -
     var WIDTH = 924 - GUTTER_X * 2;
 
+    var overlay = GOVUK.Insights.formatSuccessOverlay;
+
     var values = data.map(
         function (formatEvents) {
             return {
@@ -173,9 +175,10 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
 
     var graph = panel
         .append("svg:g")
+        .attr("id", "format-success-graph")
         .attr("transform", "translate(" + GUTTER_X + "," + GUTTER_Y_TOP + ")");
 
-    var plotData = function (graph) {
+    var plotFormats = function (graph) {
         // Draw xy scatterplot
         graph.selectAll("circle.format")
             .data(values)
@@ -208,19 +211,20 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
                 }
 
             })
-            .on("mouseover", function(d, i) {
-                if (!options.isDetail) {
-                    d3.select(this)
-                        .style("stroke-width", "2")
-                        .style("stroke", "#f00")
-                        .style("cursor", "pointer");
+            .attr("data-format", function (d) {
+                if (d.formatName) {
+                    return d.formatName.idify();
                 }
             })
-            .on("mouseout", function(d, i) {
+            .on('mouseover', function(d, i) {
                 if (!options.isDetail) {
-                    d3.select(this)
-                        .style("stroke-width", "1")
-                        .style("stroke", options.strokeColour || "#fff");
+                    d3.select(this).style("cursor", "pointer");
+                    return overlay.onHover.apply(this, d, i);
+                }
+            })
+            .on('mouseout', function(d, i) {
+                if (!options.isDetail) {
+                    return overlay.onHoverOut.apply(this, d, i);
                 }
             })
             .on("click", function(d, i) {
@@ -244,7 +248,6 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
             .attr("cy", function(d) {
                 return y(d.percentageOfSuccess);
             });
-
     };
 
     var drawAxis = function (graph) {
@@ -341,6 +344,11 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
                 return d.formatName;
             })
             .attr("class", "circle-format")
+            .attr("data-format", function (d) {
+                if (d.formatName) {
+                    return d.formatName.idify();
+                }
+            })
             .attr("text-anchor", "middle")
             .attr("x", function (d) {
                 return x(d.total);
@@ -356,7 +364,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
         var estimatedWidthOfLegendText = 80;
         var dataForLegend = x.ticks(4).slice(1, 4);
 
-        if (dataForLegend.length > 2) dataForLegend = dataForLegend.slice(0,2);
+        if (dataForLegend.length > 2) dataForLegend = dataForLegend.slice(0, 2);
 
         var maxCircleRadius = radius(dataForLegend.slice(-1));
 
@@ -391,7 +399,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
             .attr("class", "circle-legend")
             .attr("x", -5)
             .attr("y", function (d, index) {
-                return 2*radius(d) - 5; // offset text to bottom of circles
+                return 2 * radius(d) - 5; // offset text to bottom of circles
             })
             .attr("dy", ".35em")
             .attr("text-anchor", "end")
@@ -401,7 +409,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
     };
 
     // - Actually draw the graph -
-    plotData(graph);
+    plotFormats(graph);
     drawAxis(graph);
     drawLabels(graph);
     if (!options.hideKey) {
