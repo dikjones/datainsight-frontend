@@ -33,6 +33,21 @@ GOVUK.Insights.updateFormatSelect = function(data) {
     });
 };
 
+GOVUK.Insights.successScatter = function(url) {
+    $.ajax({
+        url: url,
+        success: function(data) {
+            if (data != null) {
+                // reset element
+                $("#format-success svg").remove();
+                $("#format-success-legend svg").remove();
+                // redraw from scratch
+                GOVUK.Insights.plotFormatSuccessGraph(data);
+            }
+        }
+    })
+};
+
 GOVUK.Insights.plotFormatSuccessGraph = function (data) {
 
     // - Constants -
@@ -80,7 +95,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
     var overlayBottom = function (d) {
         var overlay = y(d.percentageOfSuccess) + radius(d.total) - HEIGHT;
         return overlay > 0 ? overlay : 0;
-    }
+    };
 
     var GUTTER_Y_BOTTOM = GUTTER_Y_TOP + d3.max(values, overlayBottom);
 
@@ -121,6 +136,21 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
             .attr("r", function (d) {
                 // add half the circle stroke width
                 return radius(d.total) + 1;
+            })
+            .on("mouseover", function(d, i) {
+                d3.select(this)
+                    .style("stroke-width", "2")
+                    .style("stroke", "#f00");
+            })
+            .on("mouseout", function(d, i) {
+                d3.select(this)
+                    .style("stroke-width", "1")
+                    .style("stroke", "#fff");
+            })
+            .on("click", function(d, i) {
+                // redraw self
+                GOVUK.Insights.successScatter("/performance/graphs/format-success.json");
+//                console.log("click", this, d, i);
             });
     };
 
@@ -173,9 +203,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
             graph.append("svg:text")
                 .text("Most used")
                 .attr("class", "label-x-right")
-                .attr("x", function () {
-                    return WIDTH - $(this).width()
-                })
+                .attr("x", WIDTH)
                 .attr("y", HEIGHT / 2 + 9)
                 .attr("dy", ".71em");
 
