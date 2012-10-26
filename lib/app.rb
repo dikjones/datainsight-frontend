@@ -119,4 +119,11 @@ class App < Sinatra::Base
     content_type :json
     api_result_to_json(api(api_urls).format_success)
   end
+
+  get "/graphs/format-success/:format.json" do
+    content_type :json
+
+    path = File.join(File.dirname(__FILE__), "../spec/fixtures/success/#{params[:format]}.json")
+    File.read(path)
+  end
 end

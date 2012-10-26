@@ -22,18 +22,59 @@ GOVUK.Insights.formatSuccess = function () {
         }});
 };
 
+GOVUK.Insights.lastBigBlob = null;
+
 GOVUK.Insights.updateFormatSelect = function(data) {
     $(data).each(function(i, datum) {
         $("#format-select")
             .append(
                 $("<option></option>")
-                    .attr("value", $.camelCase(datum.format))
+                    .attr("value", datum.format.replace(/\s+/, "-").toLowerCase())
                     .text(datum.format)
-            );
+            )
+            .on("change", function(e) {
+                if ($(this).val() == "all") {
+                    GOVUK.Insights.successRoot();
+                } else {
+                    GOVUK.Insights.successForFormat($(this).val());
+                }
+            });
     });
 };
 
-GOVUK.Insights.successScatter = function(url) {
+GOVUK.Insights.selectFormat = function(format) {
+    $("#format-select").val(format);
+};
+
+GOVUK.Insights.successForFormat = function(format, startPos) {
+    GOVUK.Insights.lastBigBlob = startPos;
+    GOVUK.Insights.successForUrl("/performance/graphs/format-success/" + format + ".json", {
+        maxRadius: 15,
+        noRadialScale: false,
+        hideKey: true,
+        startingRadius: 2,
+        strokeColour: "#888",
+        setYLimits: true,
+        startPos: startPos
+    });
+};
+
+GOVUK.Insights.successRoot = function() {
+    d3.selectAll("#format-success circle.format")
+        .transition()
+        .duration(700)
+        .style("opacity", 0)
+        .transition()
+        .duration(1000)
+        .attr("cx", GOVUK.Insights.lastBigBlob.x)
+        .attr("cy", GOVUK.Insights.lastBigBlob.y)
+        .each("end", function() {
+            GOVUK.Insights.successForUrl("/performance/graphs/format-success.json");
+        });
+
+};
+
+GOVUK.Insights.successForUrl = function(url, options) {
     $.ajax({
         url: url,
         success: function(data) {
@@ -42,22 +83,24 @@ GOVUK.Insights.successScatter = function(url) {
                 $("#format-success svg").remove();
                 $("#format-success-legend svg").remove();
                 // redraw from scratch
-                GOVUK.Insights.plotFormatSuccessGraph(data);
+                GOVUK.Insights.plotFormatSuccessGraph(data, options || {});
             }
         }
     })
 };
 
-GOVUK.Insights.plotFormatSuccessGraph = function (data) {
-
+GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
+    options = options || {};
     // - Constants -
     var MIN_Y = 0,
         MAX_Y = 100,
-        MAX_RADIUS = 30,
+        MAX_RADIUS = options.maxRadius || 30,
         GUTTER_FOR_BUBBLES = 40,
         HEIGHT = 400,
         GUTTER_X = 32,
-        GUTTER_Y_TOP = 25;
+        GUTTER_Y_TOP = 25,
+        RADIAL_SCALE = !(options.noRadialScale || false),
+        START_RADIUS = options.startingRadius || 0;
 
     // - Derived Constants -
     var WIDTH = 924 - GUTTER_X * 2;
@@ -79,7 +122,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
 
     var radiusScale = d3.scale.linear()
         .domain([0, MAX_X])
-        .range([0, Math.PI * Math.pow(MAX_RADIUS, 2)]);
+        .range([Math.PI * Math.pow(START_RADIUS, 2), Math.PI * Math.pow(MAX_RADIUS, 2)]);
 
     var radius = function (total) {
         return Math.sqrt(radiusScale(total) / Math.PI);
@@ -89,7 +132,10 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
             .domain([0, MAX_X])
             .range([GUTTER_FOR_BUBBLES + MAX_RADIUS / 2, WIDTH - (GUTTER_FOR_BUBBLES + MAX_RADIUS / 2)]),
         y = d3.scale.linear()
-            .domain([MIN_Y, MAX_Y])
+            .domain([
+                options.setYLimits ? d3.min(values, function(d) { return d.percentageOfSuccess; }) : MIN_Y,
+                options.setYLimits ? d3.max(values, function(d) { return d.percentageOfSuccess; }) : MAX_Y
+            ])
             .range([HEIGHT, 0]);
 
     var overlayBottom = function (d) {
@@ -126,16 +172,29 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
             .attr("fill", function (d) {
                 return colorScale(d.percentageOfSuccess);
             })
-            .style("opacity", 0.9)
+            .style("opacity", 0)
             .attr("cx", function (d) {
-                return x(d.total);
+                if (options.startPos) {
+                    return options.startPos.x;
+                } else {
+                    return x(d.total);
+                }
             })
             .attr("cy", function (d) {
-                return y(d.percentageOfSuccess);
+                if (options.startPos) {
+                    return options.startPos.y;
+                } else {
+                    return y(d.percentageOfSuccess);
+                }
             })
             .attr("r", function (d) {
                 // add half the circle stroke width
-                return radius(d.total) + 1;
+                if (RADIAL_SCALE) {
+                    return radius(d.total) + 1;
+                } else {
+                    return 10;
+                }
+
             })
             .on("mouseover", function(d, i) {
                 d3.select(this)
@@ -145,13 +204,25 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
             .on("mouseout", function(d, i) {
                 d3.select(this)
                     .style("stroke-width", "1")
-                    .style("stroke", "#fff");
+                    .style("stroke", options.strokeColour || "#fff");
             })
             .on("click", function(d, i) {
                 // redraw self
-                GOVUK.Insights.successScatter("/performance/graphs/format-success.json");
-//                console.log("click", this, d, i);
-            });
+                var format = d.formatName.replace(/\s+/, "-").toLowerCase();
+                GOVUK.Insights.successForFormat(format, {x:x(d.total), y:y(d.percentageOfSuccess)});
+                GOVUK.Insights.selectFormat(format);
+            })
+        .transition()
+        .duration(500)
+        .ease("linear")
+            .attr("cx", function(d) {
+                return x(d.total);
+            })
+            .attr("cy", function(d) {
+                return y(d.percentageOfSuccess);
+            })
+            .style("opacity", 1);
+
     };
 
     var drawAxis = function (graph) {
@@ -216,7 +287,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
                 .attr("dy", ".35em");
 
             graph.append("svg:text")
-                .text(MIN_Y + "%")
+                .text(Math.round(options.setYLimits ? d3.min(values, function(d) { return d.percentageOfSuccess; }) : MIN_Y) + "%")
                 .attr("class", "label-y-bottom")
                 .attr("y", HEIGHT)
                 .attr("x", WIDTH / 2 - 5)
@@ -230,7 +301,7 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
                 .attr("style", "fill: #BF1E2D");
 
             graph.append("svg:text")
-                .text(MAX_Y + "%")
+                .text(Math.round(options.setYLimits ? d3.max(values, function(d) { return d.percentageOfSuccess; }) : MAX_Y) + "%")
                 .attr("class", "label-y-top")
                 .attr("y", 0)
                 .attr("x", WIDTH / 2 - 5)
@@ -318,7 +389,10 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data) {
     plotData(graph);
     drawAxis(graph);
     drawLabels(graph);
-    drawLegend();
+    if (!options.hideKey) {
+        drawLegend();
+    }
+
 };
 
 // register with jQuery's autorun.
