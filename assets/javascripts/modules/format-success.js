@@ -10,6 +10,7 @@ GOVUK.Insights.formatSuccess = function () {
         url:'/performance/graphs/format-success.json',
         success:function (data) {
             if (data !== null) {
+                GOVUK.Insights.updateFormatSelect(data);
                 if (GOVUK.isSvgSupported()) {
                     $('#format-success-module img').remove();
                     GOVUK.Insights.plotFormatSuccessGraph(data);
@@ -19,6 +20,17 @@ GOVUK.Insights.formatSuccess = function () {
                 showError();
             }
         }});
+};
+
+GOVUK.Insights.updateFormatSelect = function(data) {
+    $(data).each(function(i, datum) {
+        $("#format-select")
+            .append(
+                $("<option></option>")
+                    .attr("value", $.camelCase(datum.format))
+                    .text(datum.format)
+            );
+    });
 };
 
 GOVUK.Insights.plotFormatSuccessGraph = function (data) {
