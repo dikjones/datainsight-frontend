@@ -55,22 +55,25 @@ GOVUK.Insights.successForFormat = function(format, startPos) {
         startingRadius: 2,
         strokeColour: "#888",
         setYLimits: true,
-        startPos: startPos
+        startPos: startPos,
+        isDetail: true
     });
 };
 
 GOVUK.Insights.successRoot = function() {
     d3.selectAll("#format-success circle.format")
         .transition()
-        .duration(700)
-        .style("opacity", 0)
-        .transition()
         .duration(1000)
-        .attr("cx", GOVUK.Insights.lastBigBlob.x)
-        .attr("cy", GOVUK.Insights.lastBigBlob.y)
-        .each("end", function() {
-            GOVUK.Insights.successForUrl("/performance/graphs/format-success.json");
-        });
+            .style("opacity", 0)
+        .transition()
+        .duration(function() {
+            return (Math.random() * 500) + 500;
+        })
+            .attr("cx", GOVUK.Insights.lastBigBlob.x)
+            .attr("cy", GOVUK.Insights.lastBigBlob.y)
+            .each("end", function() {
+                GOVUK.Insights.successForUrl("/performance/graphs/format-success.json");
+            });
 
 };
 
@@ -105,12 +108,11 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
     // - Derived Constants -
     var WIDTH = 924 - GUTTER_X * 2;
 
-
-
     var values = data.map(
         function (formatEvents) {
             return {
                 formatName:formatEvents["format"],
+                needId: formatEvents["needId"],
                 total:formatEvents["entries"],
                 percentageOfSuccess:formatEvents["percentage_of_success"]
             };
@@ -119,6 +121,9 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
     var MAX_X = d3.max(values, function (formatData) {
         return formatData["total"];
     });
+
+    var REAL_MIN_Y = options.setYLimits ? d3.min(values, function(d) { return d.percentageOfSuccess; }) : MIN_Y,
+        REAL_MAX_Y = options.setYLimits ? d3.max(values, function(d) { return d.percentageOfSuccess; }) : MAX_Y;
 
     var radiusScale = d3.scale.linear()
         .domain([0, MAX_X])
@@ -130,12 +135,12 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
 
     var x = d3.scale.linear()
             .domain([0, MAX_X])
+            // TODO: move the gutter out of the scale, this should
+            //       be handled by extending the max of the domain by whatever is needed
             .range([GUTTER_FOR_BUBBLES + MAX_RADIUS / 2, WIDTH - (GUTTER_FOR_BUBBLES + MAX_RADIUS / 2)]),
         y = d3.scale.linear()
-            .domain([
-                options.setYLimits ? d3.min(values, function(d) { return d.percentageOfSuccess; }) : MIN_Y,
-                options.setYLimits ? d3.max(values, function(d) { return d.percentageOfSuccess; }) : MAX_Y
-            ])
+            .domain([REAL_MIN_Y, REAL_MAX_Y])
+//            .domain([MIN_Y, MAX_Y])
             .range([HEIGHT, 0]);
 
     var overlayBottom = function (d) {
@@ -143,11 +148,18 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
         return overlay > 0 ? overlay : 0;
     };
 
-    var GUTTER_Y_BOTTOM = GUTTER_Y_TOP + d3.max(values, overlayBottom);
+    var GUTTER_Y_BOTTOM = GUTTER_Y_TOP + d3.max(values, overlayBottom) + 25;
 
     var colorScale = d3.scale.linear()
-        .domain([MIN_Y, MIN_Y + (MAX_Y - MIN_Y) / 2, MAX_Y])
-        .range(["#BF1E2D", "#B3B3B3", "#74B74A"]);
+        .domain([
+            REAL_MIN_Y,
+            REAL_MIN_Y + (REAL_MAX_Y - REAL_MIN_Y) / 100 * 40,
+            REAL_MIN_Y + (REAL_MAX_Y - REAL_MIN_Y) / 2,
+            REAL_MIN_Y + (REAL_MAX_Y - REAL_MIN_Y) / 100 * 60,
+            REAL_MAX_Y
+        ])
+//        .domain([MIN_Y, MIN_Y + (MAX_Y - MIN_Y) / 2, MAX_Y])
+        .range(["#BF1E2D", "#B3B3B3", "#B3B3B3", "#B3B3B3", "#74B74A"]);
 
     var svg = d3.select("#format-success")
         .data(values)
@@ -197,31 +209,41 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
 
             })
             .on("mouseover", function(d, i) {
-                d3.select(this)
-                    .style("stroke-width", "2")
-                    .style("stroke", "#f00");
+                if (!options.isDetail) {
+                    d3.select(this)
+                        .style("stroke-width", "2")
+                        .style("stroke", "#f00")
+                        .style("cursor", "pointer");
+                }
             })
             .on("mouseout", function(d, i) {
-                d3.select(this)
-                    .style("stroke-width", "1")
-                    .style("stroke", options.strokeColour || "#fff");
+                if (!options.isDetail) {
+                    d3.select(this)
+                        .style("stroke-width", "1")
+                        .style("stroke", options.strokeColour || "#fff");
+                }
             })
             .on("click", function(d, i) {
-                // redraw self
-                var format = d.formatName.replace(/\s+/, "-").toLowerCase();
-                GOVUK.Insights.successForFormat(format, {x:x(d.total), y:y(d.percentageOfSuccess)});
-                GOVUK.Insights.selectFormat(format);
+                if (!options.isDetail) {
+                    // redraw self
+                    var format = d.formatName.replace(/\s+/, "-").toLowerCase();
+                    GOVUK.Insights.successForFormat(format, {x:x(d.total), y:y(d.percentageOfSuccess)});
+                    GOVUK.Insights.selectFormat(format);
+                }
             })
         .transition()
         .duration(500)
-        .ease("linear")
+            .style("opacity", 0.7)
+        .transition()
+        .duration(function() {
+            return (Math.random() * 500) + 300;
+        })
             .attr("cx", function(d) {
                 return x(d.total);
             })
             .attr("cy", function(d) {
                 return y(d.percentageOfSuccess);
-            })
-            .style("opacity", 1);
+            });
 
     };
 
@@ -280,17 +302,17 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
 
             // Place Y axis tick labels
             panel.append("svg:text")
-                .text("Used successfully")
+                .text("More successful")
                 .attr("class", "title-y")
                 .attr("y", 5)
                 .attr("x", WIDTH / 2 + GUTTER_X)
                 .attr("dy", ".35em");
 
-            graph.append("svg:text")
-                .text(Math.round(options.setYLimits ? d3.min(values, function(d) { return d.percentageOfSuccess; }) : MIN_Y) + "%")
-                .attr("class", "label-y-bottom")
-                .attr("y", HEIGHT)
-                .attr("x", WIDTH / 2 - 5)
+            panel.append("svg:text")
+                .text("Less successful")
+                .attr("class", "title-y")
+                .attr("y", HEIGHT + 40) // calculate how high it should be
+                .attr("x", WIDTH / 2 + GUTTER_X)
                 .attr("dy", ".35em");
 
             graph.append("rect")
@@ -299,13 +321,6 @@ GOVUK.Insights.plotFormatSuccessGraph = function (data, options) {
                 .attr("y", HEIGHT - 6)
                 .attr("x", WIDTH / 2 + 7)
                 .attr("style", "fill: #BF1E2D");
-
-            graph.append("svg:text")
-                .text(Math.round(options.setYLimits ? d3.max(values, function(d) { return d.percentageOfSuccess; }) : MAX_Y) + "%")
-                .attr("class", "label-y-top")
-                .attr("y", 0)
-                .attr("x", WIDTH / 2 - 5)
-                .attr("dy", ".35em");
 
             graph.append("rect")
                 .attr("height", 12)
